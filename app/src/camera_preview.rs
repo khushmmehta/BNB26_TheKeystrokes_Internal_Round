@@ -34,7 +34,7 @@ pub fn CameraPreview() -> impl IntoView {
         });
     });
 
-    match stream.get() {
+    match stream.get_untracked() {
         Some(Err(e)) => Some(format!("Could not start the camera: {e:?}")),
         _ => None,
     };
