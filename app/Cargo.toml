@@ -9,6 +9,7 @@ edition = "2021"
 leptos.workspace = true
 leptos_meta.workspace = true
 leptos_router.workspace = true
+leptos-use.workspace = true
 leptos_axum = { workspace = true, optional = true }
 
 http.workspace = true
@@ -18,5 +19,4 @@ thiserror.workspace = true
 [features]
 default = []
 hydrate = ["leptos/hydrate"]
-ssr = ["leptos/ssr", "leptos_meta/ssr", "leptos_router/ssr", "dep:leptos_axum"]
-
+ssr = ["leptos/ssr", "leptos_meta/ssr", "leptos_router/ssr", "leptos-use/ssr", "dep:leptos_axum"]

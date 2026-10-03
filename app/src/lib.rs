@@ -1,9 +1,14 @@
+mod camera_preview;
+
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, Title};
 use leptos_router::{
     components::{Route, Router, Routes},
-    StaticSegment,
+    hooks::{use_navigate, use_params_map},
+    ParamSegment, StaticSegment,
 };
+
+use camera_preview::CameraPreview;
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -39,21 +44,44 @@ pub fn App() -> impl IntoView {
             <main>
                 <Routes fallback=|| "Page not found.".into_view()>
                     <Route path=StaticSegment("") view=HomePage/>
+                    <Route path=(StaticSegment("room"), ParamSegment("id")) view=RoomPage/>
                 </Routes>
             </main>
         </Router>
     }
 }
 
-/// Renders the home page of your application.
 #[component]
 fn HomePage() -> impl IntoView {
-    // Creates a reactive value to update the button
-    let count = RwSignal::new(0);
-    let on_click = move |_| *count.write() += 1;
+    let room = RwSignal::new(String::new());
+    let navigate = use_navigate();
+
+    let join = move |_| {
+        let name = room.get_untracked().trim().to_string();
+        if !name.is_empty() {
+            navigate(&format!("/room/{name}"), Default::default());
+        }
+    };
 
     view! {
-        <h1>"Welcome to Leptos!"</h1>
-        <button on:click=on_click>"Click Me: " {count}</button>
+        <h1>"RoundTable"</h1>
+        <input
+            type="text"
+            placeholder="Room name"
+            prop:value=move || room.get()
+            on:input:target=move |ev| room.set(ev.target().value())
+        />
+        <button on:click=join>"Join"</button>
+    }
+}
+
+#[component]
+fn RoomPage() -> impl IntoView {
+    let params = use_params_map();
+    let id = move || params.read().get("id").unwrap_or_default();
+
+    view! {
+        <h1>"Room: " {id}</h1>
+        <CameraPreview/>
     }
 }

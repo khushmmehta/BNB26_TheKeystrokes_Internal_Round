@@ -1,4 +1,18 @@
 body {
-	font-family: sans-serif;
-	text-align: center;
+    font-family: sans-serif;
+    text-align: center;
+}
+
+.preview {
+    width: 480px;
+    max-width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #111;
+    border-radius: 12px;
+    object-fit: cover;
+    transform: scaleX(-1); // mirror your own preview, like Meet does
+}
+
+.error {
+    color: #b00020;
 }
