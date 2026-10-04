@@ -16,6 +16,9 @@ http.workspace = true
 cfg-if.workspace = true
 thiserror.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys.workspace = true
 
 [features]
 default = []

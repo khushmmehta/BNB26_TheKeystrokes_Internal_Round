@@ -1,5 +1,5 @@
-mod camera_preview;
 pub mod signaling;
+pub mod webrtc;
 
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, Title};
@@ -9,7 +9,8 @@ use leptos_router::{
     ParamSegment, StaticSegment,
 };
 
-use camera_preview::CameraPreview;
+use signaling::RoomId;
+use webrtc::use_webrtc;
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -81,8 +82,44 @@ fn RoomPage() -> impl IntoView {
     let params = use_params_map();
     let id = move || params.read().get("id").unwrap_or_default();
 
+    let webrtc = use_webrtc();
+    let navigate = use_navigate();
+    let join = webrtc.join;
+
+    Effect::new(move |_| join.run((RoomId(id()), String::from("guest"))));
+
     view! {
         <h1>"Room: " {id}</h1>
-        <CameraPreview/>
+        <Show when=move || webrtc.error.get().is_some()>
+            <p class="error">{move || webrtc.error.get().unwrap_or_default()}</p>
+        </Show>
+        <div class="grid">
+            <Video stream=move || webrtc.local.get() name=String::from("you")/>
+            <For each=move || webrtc.peers.get() key=|peer| peer.info.id.0.clone() let:peer>
+                <Video stream=move || Some(peer.stream.clone()) name=peer.info.name.clone()/>
+            </For>
+        </div>
+        <button on:click=move |_| navigate("/", Default::default())>"Leave"</button>
+    }
+}
+
+#[component]
+fn Video(
+    stream: impl Fn() -> Option<web_sys::MediaStream> + 'static,
+    name: String,
+) -> impl IntoView {
+    let video_ref = NodeRef::<leptos::html::Video>::new();
+
+    Effect::new(move |_| {
+        if let (Some(el), Some(stream)) = (video_ref.get(), stream()) {
+            el.set_src_object(Some(&stream));
+        }
+    });
+
+    view! {
+        <figure>
+            <video node_ref=video_ref autoplay playsinline muted=true></video>
+            <figcaption>{name}</figcaption>
+        </figure>
     }
 }

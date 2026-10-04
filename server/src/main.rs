@@ -1,15 +1,14 @@
-use axum::{Router, routing::get};
+use app::*;
+use axum::{routing::get, Router};
+use leptos::logging::log;
 use leptos::prelude::*;
 use leptos_axum::{generate_route_list, LeptosRoutes};
-use app::*;
-use leptos::logging::log;
 
 mod signaling;
 use crate::signaling::ws_handler;
 
 #[tokio::main]
 async fn main() {
-
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
     let leptos_options = conf.leptos_options;

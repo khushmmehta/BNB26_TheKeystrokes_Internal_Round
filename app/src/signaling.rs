@@ -16,17 +16,32 @@ pub enum SignalingMessage {
     /// Client -> Server: Join a room
     Join { room_id: RoomId, peer_name: String },
     /// Server -> Client: Successfully joined, receives list of existing peers
-    Joined { peer_id: PeerId, peers: Vec<PeerInfo> },
+    Joined {
+        peer_id: PeerId,
+        peers: Vec<PeerInfo>,
+    },
     /// Server -> Client: New peer joined the room
     PeerJoined { peer: PeerInfo },
     /// Server -> Client: Peer left the room
     PeerLeft { peer_id: PeerId },
     /// Client <-> Server -> Client: WebRTC Offer
-    Offer { from: PeerId, to: PeerId, sdp: String },
+    Offer {
+        from: PeerInfo,
+        to: PeerId,
+        sdp: String,
+    },
     /// Client <-> Server -> Client: WebRTC Answer
-    Answer { from: PeerId, to: PeerId, sdp: String },
+    Answer {
+        from: PeerInfo,
+        to: PeerId,
+        sdp: String,
+    },
     /// Client <-> Server -> Client: ICE Candidate
-    IceCandidate { from: PeerId, to: PeerId, candidate: IceCandidateData },
+    IceCandidate {
+        from: PeerInfo,
+        to: PeerId,
+        candidate: IceCandidateData,
+    },
     /// Server -> Client: Error message
     Error { message: String },
 }

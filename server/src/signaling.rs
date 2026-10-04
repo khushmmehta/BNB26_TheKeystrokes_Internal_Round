@@ -106,7 +106,7 @@ async fn handle_socket(socket: WebSocket) {
             | SignalingMessage::IceCandidate {
                 ref from, ref to, ..
             } => {
-                if current_peer.as_ref() != Some(from) {
+                if current_peer.as_ref() != Some(&from.id) {
                     continue;
                 }
                 forward(&current_room, to, msg.clone()).await;
