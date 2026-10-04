@@ -1,0 +1,41 @@
+services:
+  # Serves the wasm bundle, holds the SFU App Secret, and proxies the Realtime
+  # API. `expose` not `ports`: nothing is reachable on the host's interfaces,
+  # the only way in is the tunnel.
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Cargo.toml ships 127.0.0.1, which the tunnel cannot reach.
+      LEPTOS_SITE_ADDR: 0.0.0.0:3000
+      LEPTOS_SITE_ROOT: /srv/site
+    # cachyos-hello runs systemd-resolved in "resolv.conf mode: foreign" with
+    # nss-resolve, so /etc/resolv.conf on the host is intentionally empty and
+    # glibc resolves through D-Bus. Docker does not use nss-resolve -- it parses
+    # that file to pick upstream resolvers, finds none, and its embedded DNS at
+    # 127.0.0.11 fails every lookup with SERVFAIL. Name these explicitly.
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+    expose:
+      - "3000"
+
+  # Carries traffic to https://roundtable.khushm.com. Cloudflare's edge
+  # terminates TLS, so this talks plain HTTP to app:3000 over the compose
+  # network, where the `app` service name resolves.
+  #
+  # No healthcheck: the image is distroless, so CMD-SHELL cannot run. This
+  # reconnects on its own after network drops, and `restart` covers the rest.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:?TUNNEL_TOKEN missing from .env}
+    # Same reason as app: without upstream resolvers this crash-loops on
+    # "Couldn't resolve SRV record region1.v2.argotunnel.com".
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+    depends_on:
+      - app

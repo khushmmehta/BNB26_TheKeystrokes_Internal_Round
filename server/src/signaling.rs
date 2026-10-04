@@ -6,10 +6,13 @@ use axum::{
 use futures::{sink::SinkExt, stream::StreamExt};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use uuid::Uuid;
 
 const MAX_PEERS: usize = 16;
+/// Well under the idle timeout of common proxies (Caddy sits around 5min).
+const HEARTBEAT_SECS: u64 = 25;
 
 type PeerData = (PeerInfo, mpsc::Sender<SignalingMessage>);
 type RoomPeers = HashMap<PeerId, PeerData>;
@@ -34,6 +37,20 @@ async fn handle_socket(socket: WebSocket) {
             let json = serde_json::to_string(&msg).unwrap();
             if sink.send(Message::Text(json.into())).await.is_err() {
                 break;
+            }
+        }
+    });
+
+    // Our signaling socket goes quiet once a call is set up, which is exactly
+    // when a proxy in the path decides to reclaim it. Ping well inside any
+    // plausible idle window. A failed send means the peer is gone.
+    let ping_task = tokio::spawn({
+        let tx = tx.clone();
+        async move {
+            let mut beat = tokio::time::interval(Duration::from_secs(HEARTBEAT_SECS));
+            beat.tick().await;
+            while tx.send(SignalingMessage::Ping).await.is_ok() {
+                beat.tick().await;
             }
         }
     });
@@ -116,6 +133,7 @@ async fn handle_socket(socket: WebSocket) {
     }
 
     send_task.abort();
+    ping_task.abort();
     if let (Some(r), Some(p)) = (current_room, current_peer) {
         leave(&r, &p).await;
     }

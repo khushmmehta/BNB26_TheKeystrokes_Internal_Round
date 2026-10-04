@@ -4,9 +4,8 @@ members = ["app", "frontend", "server"]
 
 # need to be applied only to wasm build
 [profile.release]
-codegen-units = 1
-lto = true
-opt-level = 'z'
+# codegen-units = 1
+lto = "thin"
 
 [workspace.dependencies]
 leptos = { version = "0.8.21" }
@@ -15,7 +14,14 @@ leptos_router = { version = "0.8.16" }
 leptos_axum = { version = "0.8.10" }
 leptos-use = { version = "0.19.2" }
 
-axum = { version = "0.8.9", features = ["ws"] }
+axum = { version = "0.8.9", features = ["ws", "http2"] }
+# Server-only: outbound HTTPS to the Cloudflare Realtime SFU. Never add this to
+# the `app` crate -- that one is compiled to wasm.
+reqwest = { version = "0.13", default-features = false, features = [
+    "rustls",
+    "json",
+    "http2",
+] }
 cfg-if = "1.0.5"
 console_error_panic_hook = "0.1.7"
 console_log = "1.1.0"
@@ -32,11 +38,17 @@ wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
     "MediaStream",
     "MediaStreamTrack",
+    "RtcConfiguration",
     "RtcIceCandidate",
+    "RtcIceServer",
     "RtcIceCandidateInit",
     "RtcPeerConnection",
     "RtcPeerConnectionIceEvent",
+    # Required by the addTrack overload that returns the RtpSender.
+    "RtcRtpSender",
     "RtcSdpType",
+    # `remoteDescription` getter, used to tell whether candidates can attach yet.
+    "RtcSessionDescription",
     "RtcSessionDescriptionInit",
     "RtcTrackEvent",
 ] }
@@ -51,7 +63,7 @@ tracing = "0.1"
 # that are used together frontend (lib) & server (bin)
 [[workspace.metadata.leptos]]
 # this name is used for the wasm, js and css file names
-name = "bnb26_thekeystrokes_internal_round"
+name = "rt3"
 
 # the package in the workspace that contains the server binary (binary crate)
 bin-package = "server"
@@ -87,8 +99,12 @@ browserquery = "defaults"
 # Set by cargo-leptos watch when building with that tool. Controls whether autoreload JS will be included in the head
 watch = false
 
+# cargo-leptos otherwise downloads and runs wasm-opt on every build. Skipping it
+# costs a little bundle size and saves minutes per rebuild.
+wasm-opt = false
+
 # The environment Leptos will run in, usually either "DEV" or "PROD"
-env = "DEV"
+env = "PROD"
 
 # The features to use when compiling the bin target
 #
