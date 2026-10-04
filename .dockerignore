@@ -1,0 +1,14 @@
+.env
+target
+pkg
+node_modules
+test-results
+end2end/playwright-report
+playwright/.cache
+.git
+.github
+README.md
+LICENSE
+Dockerfile
+docker-compose.yml
+Caddyfile

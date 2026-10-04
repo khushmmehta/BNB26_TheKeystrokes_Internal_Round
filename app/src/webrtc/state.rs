@@ -1,4 +1,4 @@
-use crate::signaling::{PeerId, PeerInfo, SignalingMessage};
+use crate::signaling::{IceCandidateData, PeerId, PeerInfo, SignalingMessage};
 use leptos::prelude::*;
 use std::{collections::HashMap, sync::Arc, sync::Mutex};
 use web_sys::{MediaStream, RtcPeerConnection};
@@ -18,6 +18,8 @@ pub struct Ctx {
     name: Mutex<String>,
     /// One connection per remote peer.
     pcs: Mutex<HashMap<PeerId, RtcPeerConnection>>,
+    /// Candidates that arrived before we had a remote description for them.
+    pending: Mutex<HashMap<PeerId, Vec<IceCandidateData>>>,
     /// Our camera + mic.
     pub local: RwSignal<Option<MediaStream>>,
     pub send_msg: Sender,
@@ -30,6 +32,7 @@ impl Ctx {
             me: Default::default(),
             name: Default::default(),
             pcs: Default::default(),
+            pending: Default::default(),
             local,
             send_msg,
             on_track,
@@ -72,6 +75,25 @@ impl Ctx {
         for (_, pc) in self.pcs.lock().expect("poisoned").drain() {
             pc.close();
         }
+    }
+
+    /// Parks a candidate until the peer's remote description is set.
+    pub fn defer(&self, id: &PeerId, candidate: IceCandidateData) {
+        self.pending
+            .lock()
+            .expect("poisoned")
+            .entry(id.clone())
+            .or_default()
+            .push(candidate);
+    }
+
+    /// Takes everything parked for a peer, clearing the slot.
+    pub fn take_pending(&self, id: &PeerId) -> Vec<IceCandidateData> {
+        self.pending
+            .lock()
+            .expect("poisoned")
+            .remove(id)
+            .unwrap_or_default()
     }
 }
 

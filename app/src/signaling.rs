@@ -44,6 +44,9 @@ pub enum SignalingMessage {
     },
     /// Server -> Client: Error message
     Error { message: String },
+    /// Keepalive. Proxies reap idle sockets, and signaling is idle between
+    /// the initial handshake and someone joining or leaving.
+    Ping,
 }
 
 /// Information about a peer in the room

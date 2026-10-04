@@ -20,6 +20,8 @@ pub struct UseWebRtcReturn {
     pub local: RwSignal<Option<MediaStream>>,
     /// Last thing the signaling server complained about.
     pub error: RwSignal<Option<String>>,
+    /// Human-readable progress, so a silent failure is impossible to miss.
+    pub status: RwSignal<String>,
     pub join: Callback<(RoomId, String)>,
 }
 
@@ -27,6 +29,7 @@ pub fn use_webrtc() -> UseWebRtcReturn {
     let peers = RwSignal::new(Vec::<RemotePeer>::new());
     let local = RwSignal::new(None::<MediaStream>);
     let error = RwSignal::new(None);
+    let status = RwSignal::new(String::from("starting up"));
     let want = RwSignal::new(None::<(RoomId, String)>);
 
     let UseUserMediaReturn { stream, start, .. } = use_user_media();
@@ -34,7 +37,7 @@ pub fn use_webrtc() -> UseWebRtcReturn {
         use_websocket::<String, String, codee::string::FromToStringCodec>(WS_URL);
 
     let ctx = Arc::new(state::Ctx::new(
-        local.clone(),
+        local,
         Arc::new(move |msg| send(&serde_json::to_string(&msg).expect("serializable"))),
         Arc::new(move |info, stream| {
             if let Some(mut list) = peers.try_get() {
@@ -50,19 +53,37 @@ pub fn use_webrtc() -> UseWebRtcReturn {
         }),
     ));
 
-    // Ask for the camera, publish it, and hold the join request until the
-    // browser has answered: our tracks have to be in place before we offer.
+    // Ask for the camera, publish it, and hold the join request until the browser
+    // has answered. Joining without tracks is worse than not joining: we would
+    // offer an SDP with no media and the other side would see nobody.
     Effect::new(move |_| start());
     Effect::new({
         let ctx = ctx.clone();
         move |_| {
             let media = stream.get();
+
+            match &media {
+                Some(Ok(_)) => status.set(String::from("camera ready")),
+                Some(Err(e)) => {
+                    status.set(format!("camera blocked: {e:?}"));
+                    leptos::logging::error!("camera blocked: {e:?}");
+                }
+                None => status.set(String::from("waiting for camera permission")),
+            }
             local.set(media.clone().and_then(Result::ok));
 
-            let (Some((room_id, peer_name)), Some(_)) = (want.get(), media) else {
+            let Some((room_id, peer_name)) = want.get() else {
                 return;
             };
+            // Still pending: keep waiting, and keep `want` so we retry when the
+            // camera finally lands.
+            if media.is_none() {
+                return;
+            }
             want.set(None);
+
+            status.set(format!("joining {room_id:?} as {peer_name}"));
+            leptos::logging::log!("joining room {room_id:?} as {peer_name}");
             ctx.name(peer_name.clone());
             (ctx.send_msg)(SignalingMessage::Join { room_id, peer_name });
         }
@@ -81,16 +102,24 @@ pub fn use_webrtc() -> UseWebRtcReturn {
                 match msg {
                     SignalingMessage::Joined { peer_id, peers } => {
                         ctx.joined(peer_id);
+                        status.set(if peers.is_empty() {
+                            String::from("in the room — waiting for others to join")
+                        } else {
+                            format!("in the room — connecting to {} peer(s)", peers.len())
+                        });
                         // We are the newcomer, so we offer to everyone already here.
                         for peer in peers {
                             peer::negotiate(&ctx, &peer, true).await;
                         }
                     }
-                    SignalingMessage::PeerJoined { .. } => {
-                        // Nothing to do: they will offer to us.
+                    SignalingMessage::PeerJoined { peer } => {
+                        // Nothing to negotiate yet: they will offer to us.
+                        status.set(format!("{} joined \u{2014} connecting", peer.name));
+                        leptos::logging::log!("peer joined: {} {:?}", peer.name, peer.id);
                     }
                     SignalingMessage::PeerLeft { peer_id } => {
                         ctx.disconnect(&peer_id);
+                        status.set(String::from("someone left the room"));
                         if let Some(list) = peers.try_get() {
                             peers.try_set(
                                 list.into_iter().filter(|p| p.info.id != peer_id).collect(),
@@ -112,6 +141,8 @@ pub fn use_webrtc() -> UseWebRtcReturn {
                     SignalingMessage::Error { message } => {
                         error.try_set(Some(message));
                     }
+                    // Echo the server's keepalive so the socket is busy both ways.
+                    SignalingMessage::Ping => (ctx.send_msg)(SignalingMessage::Ping),
                     SignalingMessage::Join { .. } => {}
                 }
             });
@@ -131,6 +162,7 @@ pub fn use_webrtc() -> UseWebRtcReturn {
         peers,
         local,
         error,
+        status,
         join,
     }
 }
